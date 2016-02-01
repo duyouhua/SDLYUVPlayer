@@ -15,6 +15,65 @@ typedef struct PlayContext_s
 	char filepath[256];
 }PlayContext_t;
 
+static int getfilesize(const char * filepath)
+{
+	int length = 0;
+	FILE * pfile = NULL;
+
+	if (!filepath || strlen(filepath)==0)
+	{
+		return -1;
+	}
+	pfile = fopen(filepath, "rb");
+	if (!pfile)
+	{
+		return -2;
+	}
+	fseek(pfile,0,SEEK_END);
+	length = ftell(pfile);
+	fclose(pfile);
+	return length;
+}
+
+static int detect_yuv_wh(const char * filepath, int *w, int *h)
+{
+	int filelen = getfilesize(filepath);
+	if ( filelen <= 0 )
+	{
+		return -1;
+	}
+	if ( !w || !h )
+	{
+		return -1;
+	}
+
+	if (filelen %(1920 * 1080 * 3 / 2) == 0)
+	{
+		*w = 1920;
+		*h = 1080;
+	}
+	else if (filelen % (1280 * 720 * 3 / 2) == 0)
+	{
+		*w = 1280;
+		*h = 720;
+	}
+	else if (filelen % (704 * 576 * 3 / 2) == 0)
+	{
+		*w = 706;
+		*h = 574;
+	}
+	else if (filelen % (352 * 288 * 3 / 2) == 0)
+	{
+		*w = 352;
+		*h = 288;
+	}
+	else{
+		*w = 352;
+		*h = 288;
+	}
+	return 0;
+}
+
 static int YUV_PlayThread(void * arg)
 {
 	PlayContext_t * PlayCtx = (PlayContext_t *)arg;
@@ -26,6 +85,9 @@ static int YUV_PlayThread(void * arg)
 	printf("YUVPlayThread start successfully.\n");
 	printf("####################\n");
 	printf("# filename : %s\n", PlayCtx->filepath);
+	printf("# width    : %d\n", PlayCtx->yuv_w);
+	printf("# height   : %d\n", PlayCtx->yuv_h);
+	printf("# fps      : %d\n", PlayCtx->yuv_fps);
 	printf("####################\n\n");
 	yuvfile = fopen(PlayCtx->filepath, "rb");
 	if (yuvfile==NULL)
@@ -141,8 +203,12 @@ int main(int argc, char * argv[])
 				break;
 			case SDL_DROPFILE:
 				strcpy(PlayCtx.filepath, event.drop.file);
-				PlayCtx.yuv_w = 352;
-				PlayCtx.yuv_h = 288;
+				if ( detect_yuv_wh(PlayCtx.filepath, &PlayCtx.yuv_w, &PlayCtx.yuv_h) < 0 )
+				{
+					printf("detect_yuv_wh failed!\n");
+					PlayCtx.yuv_w = 352;
+					PlayCtx.yuv_h = 288;
+				}
 				PlayCtx.yuv_fps = 25;
 				thread = SDL_CreateThread(YUV_PlayThread, "YUVPlayThread", (void *)&PlayCtx);
 				if (thread == NULL)
